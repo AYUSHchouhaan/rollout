@@ -9,10 +9,9 @@ import {
 import Lookup from "@/public/Lookup";
 import { MessageContext } from "@/context/messagecontext";
 import Prompt from "@/public/Prompt";
-import { api } from "@/convex/_generated/api";
-import { useConvex, useMutation } from "convex/react";
 import { useParams } from "next/navigation";
 import { Loader2Icon } from "lucide-react";
+import axios from "axios";
 
 const { sandpackFiles, sandpackDependencies } = Lookup;
 
@@ -28,8 +27,6 @@ const CodeSection = forwardRef<CodeSectionRef>((props, ref) => {
   const { messages, setMessages } = useContext(MessageContext);
   const [files, setfiles] = useState(sandpackFiles);
   const [loading, setloading] = useState(false);
-  const Updatefiles = useMutation(api.chats.updatefiles);
-  const convex = useConvex();
 
 
   useEffect(() => {
@@ -38,19 +35,20 @@ const CodeSection = forwardRef<CodeSectionRef>((props, ref) => {
   }, [id]);
 
   const getfiles = async () => {
-    const result = await convex.query(api.chats.getchats, {
-      chatid: id as any
+    const result = await axios.post('/api/chats/get', {
+      chatId: parseInt(id as string)
     });
-    if (result?.files) {
-      const mergefiles = { ...sandpackFiles, ...result.files };
+    
+    if (result.data?.files) {
+      const mergefiles = { ...sandpackFiles, ...result.data.files };
       setfiles(mergefiles);
     } else {
       setfiles(sandpackFiles);
     }
     
     // Set the message count to match loaded messages to prevent regeneration
-    if (result?.messages) {
-      setMessageCount(result.messages.length);
+    if (result.data?.messages) {
+      setMessageCount(result.data.messages.length);
     }
     setIsInitialLoad(false);
   }
@@ -113,8 +111,8 @@ const CodeSection = forwardRef<CodeSectionRef>((props, ref) => {
       if (Object.keys(filesToMerge).length > 0) {
         const mergefiles = { ...sandpackFiles, ...filesToMerge };
         setfiles(mergefiles);
-        await Updatefiles({
-          chatid: id as any,
+        await axios.post('/api/chats/update-files', {
+          chatId: parseInt(id as string),
           files: filesToMerge
         });
         console.log('✅ Files updated successfully:', Object.keys(filesToMerge));

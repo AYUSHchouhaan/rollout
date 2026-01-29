@@ -5,9 +5,8 @@ import { UserContext } from "@/context/userdetailcontext";
 import { ArrowRight } from "lucide-react";
 import React, { useContext, useState, useEffect } from "react";
 import SignInDialog from "./signindialog";
-import { useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
+import axios from "axios";
 
 function Main() {
   const [input, setInput] = useState("");  
@@ -16,7 +15,6 @@ function Main() {
   const {userDetails, setUserDetails} = useContext(UserContext);
   const { messages, setMessages } = useContext(MessageContext);
   const router = useRouter();
-  const createchat = useMutation(api.chats.createchat);
   
   // Monitor userDetails changes
   useEffect(() => {
@@ -39,8 +37,8 @@ function Main() {
       }
     ]);
 
-    const chatid = await createchat({
-      user: userDetails._id,
+    const result = await axios.post('/api/chats/create', {
+      userId: userDetails.id,
       messages: [
         {
           role: "user",
@@ -48,11 +46,12 @@ function Main() {
         }
       ]
     });
-    router.push(`/chat/${chatid}`);
+    
+    router.push(`/chat/${result.data.id}`);
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen w-full">
+    <div className="flex items-center justify-center h-full w-full overflow-hidden">
       <div className="flex flex-col gap-8 w-full max-w-2xl px-4">
         <h2 className="font-bold text-4xl text-center">Let's build something</h2>
         

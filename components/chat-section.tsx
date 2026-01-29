@@ -1,7 +1,5 @@
 "use client";
 
-import { api } from "@/convex/_generated/api";
-import { useConvex, useMutation } from "convex/react";
 import { useParams } from "next/navigation";
 import React, { useContext, useEffect, useState, RefObject } from "react";
 import { MessageContext as MessagesContext } from "@/context/messagecontext";
@@ -18,23 +16,20 @@ interface ChatSectionProps {
 
 function ChatSection({ codeSectionRef }: ChatSectionProps) {
   const { id } = useParams();
-  const convex = useConvex();
   const { messages, setMessages } = useContext(MessagesContext);
   const { userDetails, setUserDetails } = useContext(UserContext);
   const {toggleSidebar} = useSidebar();
-  const updatemessage = useMutation(api.chats.updatemessages);
 
   const [input, setInput] = useState("");
   const [loading, setloading] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const updatemessagecount = useMutation(api.user.updateMessageCount);
 
   const getchatdata = async () => {
-    const result = await convex.query(api.chats.getchats, {
-      chatid: id as any
+    const result = await axios.post('/api/chats/get', {
+      chatId: parseInt(id as string)
     });
-    setMessages(result?.messages || []);
-    console.log(result);
+    setMessages(result.data?.messages || []);
+    console.log(result.data);
   };
 
 
@@ -56,15 +51,16 @@ function ChatSection({ codeSectionRef }: ChatSectionProps) {
     
     setMessages(updatedMessages);
     
-    await updatemessage({
-      chatid: id as any,
+    await axios.post('/api/chats/update-messages', {
+      chatId: parseInt(id as string),
       messages: updatedMessages
     });
+    
     const messagecount = (userDetails?.messagecount ?? 0) - 1;
-    if (userDetails?._id) {
-      await updatemessagecount({
-        messagecount,
-        userid: userDetails._id
+    if (userDetails?.id) {
+      await axios.post('/api/users/update-message-count', {
+        userId: userDetails.id,
+        messagecount
       });
     }
     setloading(false);

@@ -13,13 +13,10 @@ import { Button } from "./ui/button";
 import { GoogleLogin } from "@react-oauth/google";
 import axios from "axios";  
 import { UserContext } from "@/context/userdetailcontext";
-import { useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api";
 import uuid4 from "uuid4";
 
 function SignInDialog({ opendialog, closedialog }: any) {
 
-    const CreateUser = useMutation(api.user.createUser)
     const {userDetails, setUserDetails} = useContext(UserContext);
 
     const handleGoogleSuccess = async (credentialResponse: any) => {
@@ -36,22 +33,23 @@ function SignInDialog({ opendialog, closedialog }: any) {
             const user = JSON.parse(jsonPayload);
             console.log('User info from Google:', user);
 
-            const createdUser = await CreateUser({
+            const response = await axios.post('/api/users/create', {
                 email: user.email,
                 name: user.name,
                 image: user.picture,
                 uuid: uuid4(),
             });
 
-            console.log('Created/fetched user from Convex:', createdUser);
+            const createdUser = response.data;
+            console.log('Created/fetched user from database:', createdUser);
 
             if (!createdUser) {
-                console.error('Failed to create/fetch user from Convex');
-                alert('Failed to sign in. Please make sure Convex is running.');
+                console.error('Failed to create/fetch user from database');
+                alert('Failed to sign in. Please try again.');
                 return;
             }
 
-            // Save Convex user data (with _id) to both localStorage and context
+            // Save user data to both localStorage and context
             if(typeof window !== 'undefined') {
                 localStorage.setItem('user', JSON.stringify(createdUser));
                 console.log('Saved to localStorage:', createdUser);
