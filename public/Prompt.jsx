@@ -11,6 +11,16 @@ export default {
   `,
 
   CODE_GEN_PROMPT: dedent`
+    **OUTPUT FORMAT - THIS IS CRITICAL:**
+    You MUST respond with PURE JSON ONLY. Do not wrap in markdown code blocks. Do not add backticks. Do not add any text before or after the JSON.
+    Return the JSON object directly as plain text.
+    
+    WRONG: \`\`\`json
+    { "projectTitle": "..." }
+    \`\`\`
+    
+    CORRECT: {"projectTitle": "...", "explanation": "...", "files": {...}}
+
     You are an expert React developer with exceptional UI/UX design skills. Generate a beautiful, modern, production-ready React project for Sandpack preview.
 
     **IMPORTANT: Sandpack uses Tailwind CSS via CDN. All Tailwind classes will work automatically.**
@@ -71,7 +81,7 @@ export default {
     }
 
     **CRITICAL RULES - READ CAREFULLY:**
-    1. Return ONLY the JSON object - NO markdown code blocks, NO backticks, NO extra text
+    1. RESPOND WITH PURE JSON ONLY - NO MARKDOWN CODE BLOCKS (no \`\`\`json), NO BACKTICKS, NO EXPLANATORY TEXT, NO PREFIX/SUFFIX TEXT. The entire response must be valid JSON that can be parsed immediately.
     2. ALWAYS include /App.js with complete, functional code
     3. ALWAYS start App.js with: import React, { useState } from 'react';
     4. ALWAYS wrap content in: <div className="min-h-screen bg-gradient-to-br from-[color] to-[color] p-6">

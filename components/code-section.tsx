@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState, useImperativeHandle, forwardRef } from "react";
+import React, { useContext, useEffect, useRef, useState } from "react";
 import {
   SandpackProvider,
   SandpackLayout,
@@ -15,47 +15,34 @@ import axios from "axios";
 
 const { sandpackFiles, sandpackDependencies } = Lookup;
 
-export interface CodeSectionRef {
-  selectedContext: any;
-  clearSelectedContext: () => void;
-}
-
-const CodeSection = forwardRef<CodeSectionRef>((props, ref) => {
+function CodeSection({ selectedModel = 'google', initialFiles = null }: {
+  selectedModel?: 'google' | 'ollama';
+  initialFiles?: Record<string, any> | null;
+}) {
 
   const { id } = useParams();
   const [activeTab, setActiveTab] = useState("code");
   const { messages, setMessages } = useContext(MessageContext);
   const [files, setfiles] = useState(sandpackFiles);
   const [loading, setloading] = useState(false);
-
-
-  useEffect(() => {
-    setIsInitialLoad(true);
-    getfiles();
-  }, [id]);
-
-  const getfiles = async () => {
-    const result = await axios.post('/api/chats/get', {
-      chatId: parseInt(id as string)
-    });
-    
-    if (result.data?.files) {
-      const mergefiles = { ...sandpackFiles, ...result.data.files };
-      setfiles(mergefiles);
-    } else {
-      setfiles(sandpackFiles);
-    }
-    
-    // Set the message count to match loaded messages to prevent regeneration
-    if (result.data?.messages) {
-      setMessageCount(result.data.messages.length);
-    }
-    setIsInitialLoad(false);
-  }
-
   const [isGenerating, setIsGenerating] = useState(false);
   const [messageCount, setMessageCount] = useState(0);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  // Track custom (non-default) files separately for DB persistence
+  const customFilesRef = useRef<Record<string, any>>(initialFiles || {});
+
+  // Initialize from parent-provided data (no duplicate API call)
+  useEffect(() => {
+    customFilesRef.current = initialFiles || {};
+    if (initialFiles) {
+      setfiles({ ...sandpackFiles, ...initialFiles });
+    } else {
+      setfiles(sandpackFiles);
+    }
+    // Match message count to prevent regeneration on initial load
+    setMessageCount(messages.length);
+    setIsInitialLoad(false);
+  }, []);
 
   const generatecode = async () => {
     if (isGenerating) return; // Prevent multiple simultaneous generations
@@ -63,11 +50,26 @@ const CodeSection = forwardRef<CodeSectionRef>((props, ref) => {
     setIsGenerating(true);
     setloading(true);
     
-    // Only send the last user message to avoid token limit issues
+    // Include existing files and conversation history for context
+    const existingCustomFiles = customFilesRef.current;
+    const hasExistingFiles = Object.keys(existingCustomFiles).length > 0;
+    
     const lastUserMessage = messages.filter(m => m.role === 'user').pop();
     const userPrompt = lastUserMessage?.content || '';
     
-    let prompt = userPrompt + " " + Prompt.CODE_GEN_PROMPT;
+    let prompt = '';
+    if (hasExistingFiles) {
+      prompt += `Existing project files:\n${JSON.stringify(existingCustomFiles)}\n\n`;
+    }
+    if (messages.length > 1) {
+      const recentMessages = messages.slice(-10); // recent context
+      prompt += `Recent conversation:\n${JSON.stringify(recentMessages)}\n\n`;
+    }
+    prompt += `Latest request: ${userPrompt}\n\n`;
+    if (hasExistingFiles) {
+      prompt += `Update the existing project based on the latest request. Keep unchanged files as-is and only modify what's needed.\n\n`;
+    }
+    prompt += Prompt.CODE_GEN_PROMPT;
 
     try {
       const response = await fetch('/api/chat/code', {
@@ -75,45 +77,22 @@ const CodeSection = forwardRef<CodeSectionRef>((props, ref) => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ prompt: prompt }),
+        body: JSON.stringify({ prompt: prompt, model: selectedModel }),
       });
 
       const data = await response.json();
       
-      let filesToMerge = {};
+      // Server already parses the LLM response — just use data.files directly
+      const filesToMerge = (data.files && Object.keys(data.files).length > 0) ? data.files : {};
       
-      // Parse the response string if it contains JSON
-      if (data.response && typeof data.response === 'string') {
-        try {
-          // Remove markdown code blocks if present
-          let jsonString = data.response.trim();
-          const codeBlockMatch = jsonString.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
-          if (codeBlockMatch) {
-            jsonString = codeBlockMatch[1].trim();
-          }
-          
-          // Parse the JSON
-          const parsedData = JSON.parse(jsonString);
-          if (parsedData.files && Object.keys(parsedData.files).length > 0) {
-            filesToMerge = parsedData.files;
-          }
-        } catch (parseError) {
-          console.warn('Failed to parse response JSON:', parseError);
-        }
-      }
-      
-      // Fallback to data.files if available
-      if (Object.keys(filesToMerge).length === 0 && data.files && Object.keys(data.files).length > 0) {
-        filesToMerge = data.files;
-      }
-      
-      // Update files if we have any
+      // Update files if we have any — merge with existing custom files
       if (Object.keys(filesToMerge).length > 0) {
-        const mergefiles = { ...sandpackFiles, ...filesToMerge };
+        customFilesRef.current = { ...customFilesRef.current, ...filesToMerge };
+        const mergefiles = { ...sandpackFiles, ...customFilesRef.current };
         setfiles(mergefiles);
         await axios.post('/api/chats/update-files', {
           chatId: parseInt(id as string),
-          files: filesToMerge
+          files: customFilesRef.current
         });
         console.log('✅ Files updated successfully:', Object.keys(filesToMerge));
       } else {
@@ -129,11 +108,6 @@ const CodeSection = forwardRef<CodeSectionRef>((props, ref) => {
       setIsGenerating(false);
     }
   }
-
-  useImperativeHandle(ref, () => ({
-    selectedContext: null,
-    clearSelectedContext: () => {},
-  }));
 
   useEffect(() => {
     // Skip if we're still loading initial data
@@ -168,27 +142,29 @@ const CodeSection = forwardRef<CodeSectionRef>((props, ref) => {
           </div>
         </div>
       </div>
-      <SandpackProvider
-        template="react"
-        theme="dark"    
-        files={files}
-        customSetup={{
-          dependencies: sandpackDependencies,
-        }}
-        options={{
-          externalResources: ["https://cdn.tailwindcss.com"],
-        }}
-      >
-        <SandpackLayout>
-          {activeTab == 'code' ? <>
-            <SandpackFileExplorer style={{ height: "80vh" }} />
-            <SandpackCodeEditor style={{ height: "80vh" }} />
-          </> :
-            <>
+      <div className="flex-1 overflow-hidden scrollbar-hide">
+        <SandpackProvider
+          template="react"
+          theme="dark"    
+          files={files}
+          customSetup={{
+            dependencies: sandpackDependencies,
+          }}
+          options={{
+            externalResources: ["https://cdn.tailwindcss.com"],
+          }}
+        >
+          <SandpackLayout>
+            <div style={{ display: activeTab === 'code' ? 'flex' : 'none', width: '100%', height: '100%' }}>
+              <SandpackFileExplorer style={{ height: "80vh" }} />
+              <SandpackCodeEditor style={{ height: "80vh" }} />
+            </div>
+            <div style={{ display: activeTab === 'preview' ? 'block' : 'none', width: '100%', height: '100%' }}>
               <SandpackPreview style={{ height: "80vh" }} showNavigator={true} />
-            </>}  
-        </SandpackLayout>
-      </SandpackProvider>
+            </div>
+          </SandpackLayout>
+        </SandpackProvider>
+      </div>
 
       {loading && (
         <div className="p-10 bg-gray-900 bg-opacity-50 absolute top-0 rounded-lg w-full h-full flex items-center justify-center">
@@ -200,10 +176,7 @@ const CodeSection = forwardRef<CodeSectionRef>((props, ref) => {
       )}
     </div >
   );
-});
-
-CodeSection.displayName = 'CodeSection';
+}
 
 export default CodeSection;
-
 

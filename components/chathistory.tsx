@@ -17,8 +17,8 @@ export function ChatHistory() {
             console.log('Cannot fetch chats: userDetails.id is missing');
             return;
         }
-        const result = await axios.post('/api/chats/user-chats', {
-            userId: userDetails.id
+        const result = await axios.get('/api/chats/user-chats', {
+            params: { userId: userDetails.id }
         });
         setchatlist(result.data as any);
     };
@@ -27,7 +27,7 @@ export function ChatHistory() {
         if (userDetails?.id) {
             fetchChats();
         }
-    },[userDetails])
+    },[userDetails?.id])
 
 
 

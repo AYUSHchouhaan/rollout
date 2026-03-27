@@ -1,8 +1,7 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 
-// Reuse the pg Pool across module reloads (important during local dev / HMR)
-// so we don't create a new connection pool on every file change.
+
 declare global {
   // eslint-disable-next-line no-var
   var __pgPool__: Pool | undefined;

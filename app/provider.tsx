@@ -2,46 +2,41 @@
 
 import React, { useState } from "react";
 import { ThemeProvider as NextThemeProvider } from "next-themes";
+import { SessionProvider, useSession } from "next-auth/react";
 import { MessageContext } from "@/context/messagecontext";
 import { UserContext } from "@/context/userdetailcontext";
-import { GoogleOAuthProvider } from "@react-oauth/google";
 import Navbar from "@/components/navbar";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/sidebar";
 import axios from "axios";
 
-
-function Provider({ children }: { children: React.ReactNode }) {
+function InnerProvider({ children }: { children: React.ReactNode }) {
 
     const [messages, setMessages] = useState<any[]>([]);
     const [userDetails, setUserDetails] = useState<any>({});
+    const { data: session, status } = useSession();
 
-    const isauthenticated = async()=>{
-        if(typeof window !== 'undefined') {
-            const userStr = localStorage.getItem('user');
-            const user = userStr ? JSON.parse(userStr) : null;
-            if (user?.email) {
+    React.useEffect(() => {
+        const syncUser = async () => {
+            if (session?.user?.email) {
                 try {
-                    const result = await axios.post('/api/users/get', {
-                        email: user.email
+                    const result = await axios.get('/api/users/get', {
+                        params: { email: session.user.email }
                     });
-                    console.log('User details from database:', result.data);
                     if (result.data) {
                         setUserDetails(result.data);
                     }
                 } catch (error) {
                     console.error('Error fetching user:', error);
                 }
+            } else if (status === 'unauthenticated') {
+                setUserDetails({});
             }
-        }
-    }
-
-    React.useEffect(() => {
-        isauthenticated();
-    }, []);
+        };
+        syncUser();
+    }, [session?.user?.email, status]);
 
     return (
-        <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!}>
         <UserContext.Provider value={{ userDetails, setUserDetails }}>
             <MessageContext.Provider value={{ messages, setMessages }}>
                 <NextThemeProvider
@@ -62,7 +57,14 @@ function Provider({ children }: { children: React.ReactNode }) {
                 </NextThemeProvider>
             </MessageContext.Provider>
         </UserContext.Provider>
-        </GoogleOAuthProvider>
+    );
+}
+
+function Provider({ children }: { children: React.ReactNode }) {
+    return (
+        <SessionProvider refetchOnWindowFocus={false} refetchInterval={5 * 60}>
+            <InnerProvider>{children}</InnerProvider>
+        </SessionProvider>
     );
 }
 

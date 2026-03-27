@@ -1,12 +1,17 @@
 import { NextResponse } from "next/server";
 import { getUser } from "@/db/queries";
 
-export async function POST(request: Request) {
+export async function GET(request: Request) {
   try {
-    const { email } = await request.json();
-    
+    const { searchParams } = new URL(request.url);
+    const email = searchParams.get('email');
+
+    if (!email) {
+      return NextResponse.json({ error: "Missing email" }, { status: 400 });
+    }
+
     const user = await getUser(email);
-    
+
     return NextResponse.json(user || null);
   } catch (error) {
     console.error("Error getting user:", error);

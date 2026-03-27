@@ -1,18 +1,23 @@
-import { startChatSession } from "@/lib/model";
+import { startChatSession, startOllamaChatSession } from "@/lib/model";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
     try {
-        const { prompt } = await request.json();
+        const { prompt, model } = await request.json();
+
+        if (model === 'ollama') {
+            const session = await startOllamaChatSession();
+            const response = await session.sendMessage(prompt);
+            return NextResponse.json({ response });
+        }
+
+        // Default: Google Gemini
         const chatSession = await startChatSession();
-        
         const result = await chatSession.sendMessage(prompt);
-        
-        // Collect all streaming chunks into a single response
+
         let airesponse = '';
         for await (const chunk of result.stream) {
-            const chunkText = chunk.text();
-            airesponse += chunkText;
+            airesponse += chunk.text();
         }
 
         return NextResponse.json({ response: airesponse });
