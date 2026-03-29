@@ -1,6 +1,6 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
-import { createUser, getUser } from "@/db/queries";
+import { createUser } from "@/db/queries";
 import uuid4 from "uuid4";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
@@ -19,12 +19,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async signIn({ user }) {
       if (!user.email || !user.name) return false;
 
-      await createUser({
+      const dbUser = await createUser({
         email: user.email,
         name: user.name,
         image: user.image || "",
         uuid: uuid4(),
       });
+
+      // Attach DB fields to user so jwt callback can pick them up
+      (user as any).id = dbUser.id;
+      (user as any).messagecount = dbUser.messagecount;
+      (user as any).uuid = dbUser.uuid;
 
       return true;
     },
@@ -37,18 +42,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return token;
     },
     async session({ session, token }: any) {
+      // No DB call — just read from token (runs on every request)
       if (session.user) {
         (session.user as any).id = token.id;
         (session.user as any).messagecount = token.messagecount;
         (session.user as any).uuid = token.uuid;
-      }
-      if (session.user?.email) {
-        const dbUser = await getUser(session.user.email);
-        if (dbUser) {
-          (session.user as any).id = dbUser.id;
-          (session.user as any).messagecount = dbUser.messagecount;
-          (session.user as any).uuid = dbUser.uuid;
-        }
       }
       return session;
     },
