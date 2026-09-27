@@ -28,6 +28,7 @@ function CodeSection({ selectedModel = 'google', initialFiles = null }: {
   const [isGenerating, setIsGenerating] = useState(false);
   const [messageCount, setMessageCount] = useState(0);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const generationRef = useRef<Promise<void> | null>(null);
   // Track custom (non-default) files separately for DB persistence
   const customFilesRef = useRef<Record<string, any>>(initialFiles || {});
 
@@ -45,10 +46,11 @@ function CodeSection({ selectedModel = 'google', initialFiles = null }: {
   }, []);
 
   const generatecode = async () => {
-    if (isGenerating) return; // Prevent multiple simultaneous generations
-    
-    setIsGenerating(true);
-    setloading(true);
+    if (generationRef.current) return; // Prevent multiple simultaneous generations
+
+    const generation = (async () => {
+      setIsGenerating(true);
+      setloading(true);
     
     // Include existing files and conversation history for context
     const existingCustomFiles = customFilesRef.current;
@@ -106,6 +108,14 @@ function CodeSection({ selectedModel = 'google', initialFiles = null }: {
       console.error('Error generating code:', error);
       setloading(false);
       setIsGenerating(false);
+    }
+    })();
+
+    generationRef.current = generation;
+    try {
+      await generation;
+    } finally {
+      generationRef.current = null;
     }
   }
 
